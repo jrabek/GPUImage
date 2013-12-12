@@ -130,7 +130,7 @@ void InitPlane(uint32_t w, uint32_t h, vertex_t *vertices, GLushort *indices)
         currentCalculatedMatrix = CATransform3DMakeRotation(M_PI, 1.0, 0.0, 0.0);
         currentCalculatedMatrix = CATransform3DRotate(currentCalculatedMatrix, -M_PI_2, 0.0, 0.0, 1.0);
         currentCalculatedMatrix = CATransform3DScale(currentCalculatedMatrix, 2.0, 2.0, 0.0);
-        currentCalculatedMatrix = CATransform3DTranslate(currentCalculatedMatrix, -0.5, -0.5, 0.0);
+        currentCalculatedMatrix = CATransform3DTranslate(currentCalculatedMatrix, -0.46, -0.48, 0.0);
 
         
         glActiveTexture(GL_TEXTURE0);
@@ -270,6 +270,70 @@ void InitPlane(uint32_t w, uint32_t h, vertex_t *vertices, GLushort *indices)
 	newFrameAvailableBlock();
 }
 
+- (void)autoHeal
+{
+    BOOL doneHealing = YES;
+    int h = imageMeshHeight + 1;
+    int w = imageMeshWidth + 1;
+    int offset;
+    const CGFloat step = 0.01;
+
+    
+    for (int y = 0; y < h; y++)
+    {
+        for (int x = 0; x < w; x++)
+        {
+            offset = y*(imageMeshWidth+1) + x;
+            
+            CGFloat dx = imageVertices[offset].dx;
+            CGFloat dy = imageVertices[offset].dy;
+            
+            if(dx > step) {
+                dx -= step;
+            }
+            
+            if(dx < -step)
+                dx += step;
+            
+            if(dy > step)
+                dy -= step;
+            
+            if(dy < -step)
+                dy += step;
+
+            if(dx > step || dx < -step) {
+                doneHealing = NO;
+            } else {
+                dx = 0.0;
+            }
+            
+            if(dy > step || dy < -step) {
+                doneHealing = NO;
+            } else {
+                dy = 0.0;
+            }
+            
+            imageVertices[offset].dx = dx;
+            imageVertices[offset].dy = dy;
+        }
+    }
+    
+    glBindBuffer(GL_ARRAY_BUFFER, imageVerticeBuffer[0]);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertex_t) * imageMeshNumVertices, imageVertices);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    
+    if(!doneHealing) {
+        [self performSelector:@selector(autoHeal) withObject:nil afterDelay:0.05];
+    }
+}
+
+- (void)startHealing
+{
+    assert([NSThread isMainThread]);
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(autoHeal) object:nil];
+    [self performSelector:@selector(autoHeal) withObject:nil afterDelay:3.0];
+}
+
 - (void)deformPointsFromCenter:(CGPoint)center toPoint:(CGPoint)point
 {
     /*
@@ -302,12 +366,12 @@ void InitPlane(uint32_t w, uint32_t h, vertex_t *vertices, GLushort *indices)
     GLfloat glPointY = point.x / screenWidth;
     GLfloat glPointX = point.y / screenHeight;
     
-    int h = imageMeshHeight - 1;
-    int w = imageMeshWidth - 1;
+    int h = imageMeshHeight + 1;
+    int w = imageMeshWidth + 1;
     int offset;
-    for (int y = 1; y < h; y++)
+    for (int y = 0; y < h; y++)
     {
-        for (int x = 1; x < w; x++)
+        for (int x = 0; x < w; x++)
         {
             offset = y*(imageMeshWidth+1) + x;
             
@@ -322,13 +386,15 @@ void InitPlane(uint32_t w, uint32_t h, vertex_t *vertices, GLushort *indices)
                 imageVertices[offset].dy = (glPointX - glCenterX);
             }
             
-            if(x==1 && y==1)
-                NSLog(@"(%d,%d) p(%.2f,%.2f) d(%.2f,%.2f) s(%.2f,%.2f,%.2f)", x, y, glPointX, glPointY, glPointX - glCenterX, glPointY - glCenterY, distX, distY,dist);
+            //if(x==1 && y==1)
+            //    NSLog(@"(%d,%d) p(%.2f,%.2f) d(%.2f,%.2f) s(%.2f,%.2f,%.2f)", x, y, glPointX, glPointY, glPointX - glCenterX, glPointY - glCenterY, distX, distY,dist);
         }
     }
     glBindBuffer(GL_ARRAY_BUFFER, imageVerticeBuffer[0]);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertex_t) * imageMeshNumVertices, imageVertices);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+    
+    [self startHealing];
 }
 
 - (BOOL)compileShader:(GLuint *)shader type:(GLenum)type file:(NSString *)file

@@ -60,6 +60,7 @@
 - (void)drawView:(id)sender
 {
     [renderer render];
+    NSLog(@"drawView");
     //[renderer renderByRotatingAroundX:0 rotatingAroundY:0];
 }
 

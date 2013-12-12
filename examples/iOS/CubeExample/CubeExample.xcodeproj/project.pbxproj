@@ -28,6 +28,7 @@
 		BCF3D690153CC5E6009A1FE5 /* DisplayViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = BCF3D68F153CC5E6009A1FE5 /* DisplayViewController.m */; };
 		BCF866F61725A44300912E34 /* libGPUImage.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BCF866F11725A41E00912E34 /* libGPUImage.a */; };
 		E5066F311855A66A008C7682 /* Default-568h@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = E5066F301855A66A008C7682 /* Default-568h@2x.png */; };
+		FF22F26B185A458800F608F2 /* GLKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FF22F26A185A458800F608F2 /* GLKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -83,6 +84,7 @@
 		BCF3D68E153CC5E5009A1FE5 /* DisplayViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DisplayViewController.h; sourceTree = "<group>"; };
 		BCF3D68F153CC5E6009A1FE5 /* DisplayViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DisplayViewController.m; sourceTree = "<group>"; };
 		E5066F301855A66A008C7682 /* Default-568h@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Default-568h@2x.png"; sourceTree = "<group>"; };
+		FF22F26A185A458800F608F2 /* GLKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GLKit.framework; path = System/Library/Frameworks/GLKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -90,6 +92,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FF22F26B185A458800F608F2 /* GLKit.framework in Frameworks */,
 				BCF866F61725A44300912E34 /* libGPUImage.a in Frameworks */,
 				BCB6B8C41505C2780041703B /* CoreGraphics.framework in Frameworks */,
 				BCB6B8A41505A9840041703B /* AVFoundation.framework in Frameworks */,
@@ -175,6 +178,7 @@
 		29B97323FDCFA39411CA2CEA /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				FF22F26A185A458800F608F2 /* GLKit.framework */,
 				BCB6B883150447DF0041703B /* GPUImage.xcodeproj */,
 				BCB6B8A11505A9840041703B /* AVFoundation.framework */,
 				BCB6B8A21505A9840041703B /* CoreMedia.framework */,

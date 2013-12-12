@@ -5,6 +5,7 @@
 
 @protocol ESRenderer <NSObject>
 
-- (void)renderByRotatingAroundX:(float)xRotation rotatingAroundY:(float)yRotation;
+- (void)render;
+- (void)deformPointsFromCenter:(CGPoint)center toPoint:(CGPoint)point;
 
 @end

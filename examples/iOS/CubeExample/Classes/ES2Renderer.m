@@ -1,5 +1,15 @@
 #import "ES2Renderer.h"
 
+#define GL_CHECK_ERR                                      \
+{                                                         \
+    GLenum errCode;                                       \
+    if ((errCode = glGetError()) != GL_NO_ERROR) {        \
+        NSLog(@"(%d) OpenGL Error: %d\n", __LINE__, errCode);          \
+                raise(SIGTRAP); \
+    }                                                     \
+}
+
+
 // uniform index
 enum {
     UNIFORM_MODELVIEWMATRIX,
@@ -12,8 +22,12 @@ GLint uniforms[NUM_UNIFORMS];
 enum {
     ATTRIB_VERTEX,
     ATTRIB_TEXTUREPOSITION,
+    ATTRIB_DEFORM,
     NUM_ATTRIBUTES
 };
+
+GLuint imageVerticeBuffer[1];
+GLuint imageIndexBuffer[1];
 
 @interface ES2Renderer (PrivateMethods)
 - (BOOL)loadShaders;
@@ -26,6 +40,73 @@ enum {
 
 @synthesize outputTexture;
 @synthesize newFrameAvailableBlock;
+
+const int imageMeshWidth = 20;
+const int imageMeshHeight = 20;
+const int imageMeshNumVertices = (imageMeshWidth + 1) * (imageMeshHeight + 1);
+const int numIndPerRow = imageMeshWidth * 2 + 2;
+const int numIndDegensReq = (imageMeshHeight - 1) * 2;
+const int imageMeshNumIndices = numIndPerRow * imageMeshHeight + numIndDegensReq;
+
+float *meshPoints;
+float *meshCoords;
+
+typedef struct
+{
+    GLfloat x, y, z; // Vertex
+    GLfloat dx, dy; // deform amount
+    GLfloat nx, ny, nz; // Normal
+    GLfloat s0, t0; // Texcoord
+} vertex_t;
+
+vertex_t *imageVertices;
+GLushort *imageIndices;
+
+void InitPlane(uint32_t w, uint32_t h, vertex_t *vertices, GLushort *indices)
+{
+    w++, h++;
+    uint32_t x, y, vert_off;
+    GLfloat x_step = 1.0/((GLfloat)w);
+    GLfloat y_step = 1.0/((GLfloat)h);
+    
+    vert_off = 0;
+    
+    for (y = 0; y < h; y++)
+    {
+        for (x = 0; x < w; x++)
+        {
+            vertices[vert_off].x = (GLfloat)x * x_step;
+            vertices[vert_off].y = (GLfloat)y * y_step;
+            vertices[vert_off].z = 0.0;
+            vertices[vert_off].dx = 0.0;
+            vertices[vert_off].dy = 0.0;
+            vertices[vert_off].s0 = (GLfloat)x * x_step;
+            vertices[vert_off].t0 = (GLfloat)y * y_step;
+            ++vert_off;
+        }
+    }
+ 
+    h--;
+    int i = 0;
+    for(int y = 0; y < h; y++)
+    {
+        int base = y * w;
+        
+        for(x = 0; x < w; x++)
+        {
+            indices[i++] = (GLuint)(base + x);
+            indices[i++] = (GLuint)(base + w + x);
+        }
+        // add a degenerate triangle (except in a last row)
+        if(y < h - 1)
+        {
+            indices[i++] = (GLuint)((y + 1) * w + (w - 1));
+            indices[i++] = (GLuint)((y + 1) * w);
+        }
+    }
+
+}
+
 
 - (id)initWithSize:(CGSize)newSize;
 {
@@ -43,8 +124,14 @@ enum {
         backingWidth = (int)newSize.width;
         backingHeight = (int)newSize.height;
 		
-		currentCalculatedMatrix = CATransform3DIdentity;
-		currentCalculatedMatrix = CATransform3DScale(currentCalculatedMatrix, 0.5, 0.5 * (320.0/480.0), 0.5);
+		//currentCalculatedMatrix = CATransform3DIdentity;
+		//currentCalculatedMatrix = CATransform3DScale(currentCalculatedMatrix, 0.5, 0.5 * (320.0/480.0), 0.5);
+        //currentCalculatedMatrix = CATransform3DMakeRotation(M_PI / 2.0, 1.0, 0.0, 0.0);
+        currentCalculatedMatrix = CATransform3DMakeRotation(M_PI, 1.0, 0.0, 0.0);
+        currentCalculatedMatrix = CATransform3DRotate(currentCalculatedMatrix, -M_PI_2, 0.0, 0.0, 1.0);
+        currentCalculatedMatrix = CATransform3DScale(currentCalculatedMatrix, 2.0, 2.0, 0.0);
+        currentCalculatedMatrix = CATransform3DTranslate(currentCalculatedMatrix, -0.5, -0.5, 0.0);
+
         
         glActiveTexture(GL_TEXTURE0);
         glGenTextures(1, &outputTexture);
@@ -69,164 +156,71 @@ enum {
 //        NSAssert(status == GL_FRAMEBUFFER_COMPLETE, @"Incomplete filter FBO: %d", status);
         glBindTexture(GL_TEXTURE_2D, 0);
         
+        imageVertices = malloc(sizeof(vertex_t) * imageMeshNumVertices);
+        imageIndices = malloc(sizeof(GLuint) * imageMeshNumIndices);
         
+        InitPlane(imageMeshWidth, imageMeshHeight, imageVertices, imageIndices);
 
-        videoCamera = [[GPUImageVideoCamera alloc] initWithSessionPreset:AVCaptureSessionPreset640x480 cameraPosition:AVCaptureDevicePositionBack];
-        videoCamera.outputImageOrientation = UIInterfaceOrientationPortrait;
-        inputFilter = [[GPUImageSepiaFilter alloc] init];
+        glGenBuffers(1, imageVerticeBuffer);
+        GL_CHECK_ERR;
+        glBindBuffer(GL_ARRAY_BUFFER, imageVerticeBuffer[0]);
+        GL_CHECK_ERR;
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_t) * imageMeshNumVertices,
+                     imageVertices, GL_DYNAMIC_DRAW);
+        GL_CHECK_ERR;
+        
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        
+        glGenBuffers(1, imageIndexBuffer);
+        GL_CHECK_ERR;
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, imageIndexBuffer[0]);
+        GL_CHECK_ERR;
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLushort) * imageMeshNumIndices,
+                     imageIndices, GL_STATIC_DRAW);
+        GL_CHECK_ERR;
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        
+        videoCamera = [[GPUImageVideoCamera alloc] initWithSessionPreset:AVCaptureSessionPreset640x480 cameraPosition:AVCaptureDevicePositionFront];
+        //videoCamera.outputImageOrientation = UIInterfaceOrientationPortrait;
+        //videoCamera.outputImageOrientation = UIInterfaceOrientationLandscapeRight;
+        //inputFilter = [[GPUImageSepiaFilter alloc] init];
         textureOutput = [[GPUImageTextureOutput alloc] init];
         textureOutput.delegate = self;
         
-        [videoCamera addTarget:inputFilter];
-        [inputFilter addTarget:textureOutput];
+        [self convert3DTransform:&currentCalculatedMatrix toMatrix:currentModelViewMatrix];
+        glkModelViewMatrix = GLKMatrix4MakeWithArray(currentModelViewMatrix);
+
+        [videoCamera addTarget:textureOutput];
+        //[inputFilter addTarget:textureOutput];
+        
+        CGRect screenRect = [[UIScreen mainScreen] bounds];
+        screenWidth = screenRect.size.width;
+        screenHeight = screenRect.size.height;
     }
 
     return self;
 }
 
-- (void)renderByRotatingAroundX:(float)xRotation rotatingAroundY:(float)yRotation;
+- (void)render
 {
     if (!newFrameAvailableBlock)
     {
         return;
     }
     
-    static const GLfloat cubeVertices[] = { 
-        -1.0, -1.0, -1.0, // 0
-        1.0,  1.0, -1.0, // 2
-        1.0, -1.0, -1.0, // 1
-
-        -1.0, -1.0, -1.0, // 0
-        -1.0,  1.0, -1.0, // 3
-        1.0,  1.0, -1.0, // 2
-
-        1.0, -1.0, -1.0, // 1
-        1.0,  1.0, -1.0, // 2
-        1.0,  1.0,  1.0, // 6
-
-        1.0,  1.0,  1.0, // 6
-        1.0, -1.0,  1.0, // 5
-        1.0, -1.0, -1.0, // 1
-
-        -1.0, -1.0,  1.0, // 4
-        1.0, -1.0,  1.0, // 5
-        1.0,  1.0,  1.0, // 6
-
-        1.0,  1.0,  1.0, // 6
-        -1.0,  1.0,  1.0,  // 7
-        -1.0, -1.0,  1.0, // 4
-
-        1.0,  1.0, -1.0, // 2
-        -1.0,  1.0, -1.0, // 3
-        1.0,  1.0,  1.0, // 6
-
-        1.0,  1.0,  1.0, // 6
-        -1.0,  1.0, -1.0, // 3
-        -1.0,  1.0,  1.0,  // 7
-
-        -1.0, -1.0, -1.0, // 0
-        -1.0,  1.0,  1.0,  // 7
-        -1.0,  1.0, -1.0, // 3
-
-        -1.0, -1.0, -1.0, // 0
-        -1.0, -1.0,  1.0, // 4
-        -1.0,  1.0,  1.0,  // 7
-
-        -1.0, -1.0, -1.0, // 0
-        1.0, -1.0, -1.0, // 1
-        1.0, -1.0,  1.0, // 5
-
-        -1.0, -1.0, -1.0, // 0
-        1.0, -1.0,  1.0, // 5
-        -1.0, -1.0,  1.0 // 4
-    };  
-
-	const GLfloat cubeTexCoords[] = {
-        0.0, 0.0,
-        1.0, 1.0,
-        1.0, 0.0,
-        
-        0.0, 0.0,
-        0.0, 1.0,
-        1.0, 1.0,
-        
-        0.0, 0.0,
-        0.0, 1.0,
-        1.0, 1.0,
-        
-        1.0, 1.0,
-        1.0, 0.0,
-        0.0, 0.0,
-
-        1.0, 0.0,
-        0.0, 0.0,
-        0.0, 1.0,
-        
-        0.0, 1.0,
-        1.0, 1.0,
-        1.0, 0.0,
-        
-        0.0, 1.0,
-        1.0, 1.0,
-        0.0, 0.0,
-        
-        0.0, 0.0,
-        1.0, 1.0,
-        1.0, 0.0,
-        
-        1.0, 0.0,
-        0.0, 1.0,
-        1.0, 1.0,
-        
-        1.0, 0.0,
-        0.0, 0.0,
-        0.0, 1.0,
-        
-        0.0, 1.0,
-        1.0, 1.0,
-        1.0, 0.0,
-        
-        0.0, 1.0,
-        1.0, 0.0,
-        0.0, 0.0
-        
-
-    };
-	
     [EAGLContext setCurrentContext:context];
-
+    
     glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebuffer);
 	
-	glEnable(GL_CULL_FACE);
-	glCullFace(GL_BACK);
-
+	//glEnable(GL_CULL_FACE);
+	//glCullFace(GL_BACK);
+    
     glViewport(0, 0, backingWidth, backingHeight);
-
+    
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 	
-    glUseProgram(program);	
-	    
-	// Perform incremental rotation based on current angles in X and Y	
-	if ((xRotation != 0.0) || (yRotation != 0.0))
-	{
-		GLfloat totalRotation = sqrt(xRotation*xRotation + yRotation*yRotation);
-		
-		CATransform3D temporaryMatrix = CATransform3DRotate(currentCalculatedMatrix, totalRotation * M_PI / 180.0, 
-															((xRotation/totalRotation) * currentCalculatedMatrix.m12 + (yRotation/totalRotation) * currentCalculatedMatrix.m11),
-															((xRotation/totalRotation) * currentCalculatedMatrix.m22 + (yRotation/totalRotation) * currentCalculatedMatrix.m21),
-															((xRotation/totalRotation) * currentCalculatedMatrix.m32 + (yRotation/totalRotation) * currentCalculatedMatrix.m31));
-		if ((temporaryMatrix.m11 >= -100.0) && (temporaryMatrix.m11 <= 100.0))
-			currentCalculatedMatrix = temporaryMatrix;
-	}
-	else
-	{
-	}
-	
-	GLfloat currentModelViewMatrix[16];
-	
-
-	[self convert3DTransform:&currentCalculatedMatrix toMatrix:currentModelViewMatrix];
+    glUseProgram(program);
     
     glActiveTexture(GL_TEXTURE4);
 	glBindTexture(GL_TEXTURE_2D, textureForCubeFace);
@@ -238,19 +232,103 @@ enum {
     // Update uniform value
 	glUniform1i(uniforms[UNIFORM_TEXTURE], 4);
 	glUniformMatrix4fv(uniforms[UNIFORM_MODELVIEWMATRIX], 1, 0, currentModelViewMatrix);
-
+    
     // Update attribute values
-    glVertexAttribPointer(ATTRIB_VERTEX, 3, GL_FLOAT, 0, 0, cubeVertices);
+    glBindBuffer(GL_ARRAY_BUFFER, imageVerticeBuffer[0]);
+    GL_CHECK_ERR;
+    glVertexAttribPointer(ATTRIB_VERTEX, 3, GL_FLOAT, GL_FALSE,
+                          sizeof(vertex_t), (void*) offsetof(vertex_t,x));
+    GL_CHECK_ERR;
     glEnableVertexAttribArray(ATTRIB_VERTEX);
-	glVertexAttribPointer(ATTRIB_TEXTUREPOSITION, 2, GL_FLOAT, 0, 0, cubeTexCoords);
-	glEnableVertexAttribArray(ATTRIB_TEXTUREPOSITION);
-
-	glDrawArrays(GL_TRIANGLES, 0, 36);
-
+    GL_CHECK_ERR;
+	glVertexAttribPointer(ATTRIB_TEXTUREPOSITION, 2, GL_FLOAT, GL_FALSE,
+                          sizeof(vertex_t), (void*) offsetof(vertex_t,s0));
+    GL_CHECK_ERR;
+    glEnableVertexAttribArray(ATTRIB_TEXTUREPOSITION);
+    GL_CHECK_ERR;
+    glVertexAttribPointer(ATTRIB_DEFORM, 2, GL_FLOAT, GL_FALSE,
+                          sizeof(vertex_t), (void*) offsetof(vertex_t,dx));
+    GL_CHECK_ERR;
+    glEnableVertexAttribArray(ATTRIB_DEFORM);
+    GL_CHECK_ERR;
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, imageIndexBuffer[0]);
+    GL_CHECK_ERR;
+    glDrawElements(GL_TRIANGLE_STRIP, imageMeshNumIndices, GL_UNSIGNED_SHORT,
+     (void*) 0);
+    /*
+    glDrawElements(GL_LINE_STRIP, imageMeshNumIndices, GL_UNSIGNED_SHORT,
+                   (void*) 0);
+     */
+    GL_CHECK_ERR;
+    
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    
     // The flush is required at the end here to make sure the FBO texture is written to before passing it back to GPUImage
     glFlush();
-
+    
 	newFrameAvailableBlock();
+}
+
+- (void)deformPointsFromCenter:(CGPoint)center toPoint:(CGPoint)point
+{
+    /*
+    bool testResult;
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
+    //GLKVector3 nearPt;
+    //GLKVector3 farPt;
+    GLKVector3 touchPt;
+    
+    touchPt = GLKMathUnproject(GLKVector3Make(center.x, center.y, 0.0), glkModelViewMatrix, GLKMatrix4Identity, &viewport[0] , &testResult);
+    //farPt = GLKMathUnproject(GLKVector3Make(center.x, center.y, 1.0), glkModelViewMatrix, GLKMatrix4Identity, &viewport[0] , &testResult);
+    //farPt = GLKVector3Subtract(farPt, nearPt);
+     
+    GLfloat glCenterX = (touchPt.v[0] + 0.9)/0.8;
+    GLfloat glCenterY = (touchPt.v[1] + 0.9)/0.8;
+    
+    touchPt = GLKMathUnproject(GLKVector3Make(point.x, point.y, 0.0), glkModelViewMatrix, GLKMatrix4Identity, &viewport[0] , &testResult);
+    //farPt = GLKMathUnproject(GLKVector3Make(point.x, point.y, 1.0), glkModelViewMatrix, GLKMatrix4Identity, &viewport[0] , &testResult);
+    //touchPt = GLKVector3Subtract(farPt, nearPt);
+    
+    
+    GLfloat glPointX = (touchPt.v[0] + 0.9)/0.8;
+    GLfloat glPointY = (touchPt.v[1] + 0.9)/0.8;
+    //CGPoint midPoint;
+     */
+    GLfloat glCenterY = center.x / screenWidth;
+    GLfloat glCenterX = center.y / screenHeight;
+    GLfloat glPointY = point.x / screenWidth;
+    GLfloat glPointX = point.y / screenHeight;
+    
+    int h = imageMeshHeight - 1;
+    int w = imageMeshWidth - 1;
+    int offset;
+    for (int y = 1; y < h; y++)
+    {
+        for (int x = 1; x < w; x++)
+        {
+            offset = y*(imageMeshWidth+1) + x;
+            
+            CGFloat px = imageVertices[offset].x;
+            CGFloat py = imageVertices[offset].y;
+            
+            GLfloat distX = glCenterX - px;
+            GLfloat distY = glCenterY - py;
+            GLfloat dist = sqrt(distX*distX + distY*distY);
+            if(dist < 0.1) {
+                imageVertices[offset].dx = (glPointY - glCenterY);
+                imageVertices[offset].dy = (glPointX - glCenterX);
+            }
+            
+            if(x==1 && y==1)
+                NSLog(@"(%d,%d) p(%.2f,%.2f) d(%.2f,%.2f) s(%.2f,%.2f,%.2f)", x, y, glPointX, glPointY, glPointX - glCenterX, glPointY - glCenterY, distX, distY,dist);
+        }
+    }
+    glBindBuffer(GL_ARRAY_BUFFER, imageVerticeBuffer[0]);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertex_t) * imageMeshNumVertices, imageVertices);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 - (BOOL)compileShader:(GLuint *)shader type:(GLenum)type file:(NSString *)file
@@ -363,14 +441,16 @@ enum {
 
     // Attach vertex shader to program
     glAttachShader(program, vertShader);
-
+    GL_CHECK_ERR;
     // Attach fragment shader to program
     glAttachShader(program, fragShader);
-
+    GL_CHECK_ERR;
     // Bind attribute locations
     // this needs to be done prior to linking
     glBindAttribLocation(program, ATTRIB_VERTEX, "position");
     glBindAttribLocation(program, ATTRIB_TEXTUREPOSITION, "inputTextureCoordinate");
+    glBindAttribLocation(program, ATTRIB_DEFORM, "deform");
+    GL_CHECK_ERR;
 
     // Link program
     if (![self linkProgram:program])
@@ -483,7 +563,8 @@ enum {
     dispatch_async(dispatch_get_main_queue(), ^{
         textureForCubeFace = callbackTextureOutput.texture;
         
-        [self renderByRotatingAroundX:0.0 rotatingAroundY:0.0];
+        //[self renderByRotatingAroundX:0.0 rotatingAroundY:0.0];
+        [self render];
     });
 }
 

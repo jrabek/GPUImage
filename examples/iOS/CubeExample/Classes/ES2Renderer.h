@@ -3,6 +3,9 @@
 #import <OpenGLES/ES2/gl.h>
 #import <OpenGLES/ES2/glext.h>
 #import <QuartzCore/QuartzCore.h>
+#import <GLKit/GLKMathUtils.h>
+#import <GLKit/GLKVector3.h>
+#import <GLKit/GLKMatrix4.h>
 #import "GPUImage.h"
 
 @class PVRTexture;
@@ -22,6 +25,10 @@
     GLuint defaultFramebuffer, colorRenderbuffer;
 
 	CATransform3D currentCalculatedMatrix;
+    GLfloat currentModelViewMatrix[16];
+    GLKMatrix4 glkModelViewMatrix;
+    GLfloat screenWidth;
+    GLfloat screenHeight;
 
     GLuint program;
     
@@ -36,7 +43,7 @@
 
 - (id)initWithSize:(CGSize)newSize;
 
-- (void)renderByRotatingAroundX:(float)xRotation rotatingAroundY:(float)yRotation;
+- (void)render;
 - (void)convert3DTransform:(CATransform3D *)transform3D toMatrix:(GLfloat *)matrix;
 - (void)startCameraCapture;
 

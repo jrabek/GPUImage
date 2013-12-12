@@ -33,14 +33,15 @@
     renderer = [[ES2Renderer alloc] initWithSize:[primaryView sizeInPixels]];
 
     textureInput = [[GPUImageTextureInput alloc] initWithTexture:renderer.outputTexture size:[primaryView sizeInPixels]];
-    filter = [[GPUImagePixellateFilter alloc] init];
-    [(GPUImagePixellateFilter *)filter setFractionalWidthOfAPixel:0.01];
+    //filter = [[GPUImagePixellateFilter alloc] init];
+    //[(GPUImagePixellateFilter *)filter setFractionalWidthOfAPixel:0.01];
 
 //    filter = [[GPUImageGaussianBlurFilter alloc] init];
 //    [(GPUImageGaussianBlurFilter *)filter setBlurSize:3.0];
 
-    [textureInput addTarget:filter];
-    [filter addTarget:primaryView];
+    //[textureInput addTarget:filter];
+    //[filter addTarget:primaryView];
+    [textureInput addTarget:primaryView];
     
     [renderer setNewFrameAvailableBlock:^{
         float currentTimeInMilliseconds = [[NSDate date] timeIntervalSinceDate:startTime] * 1000.0;
@@ -58,7 +59,8 @@
 
 - (void)drawView:(id)sender
 {
-    [renderer renderByRotatingAroundX:0 rotatingAroundY:0];
+    [renderer render];
+    //[renderer renderByRotatingAroundX:0 rotatingAroundY:0];
 }
 
 #pragma mark -
@@ -70,13 +72,17 @@
     [currentTouches minusSet:touches];
 	
 	// New touches are not yet included in the current touches for the view
+    startMovementPosition = [[touches anyObject] locationInView:self.view];
 	lastMovementPosition = [[touches anyObject] locationInView:self.view];
 }
 
 - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event;
 {
 	CGPoint currentMovementPosition = [[touches anyObject] locationInView:self.view];
-	[renderer renderByRotatingAroundX:(currentMovementPosition.x - lastMovementPosition.x) rotatingAroundY:(lastMovementPosition.y - currentMovementPosition.y)];
+	//[renderer renderByRotatingAroundX:(currentMovementPosition.x - lastMovementPosition.x) rotatingAroundY:(lastMovementPosition.y - currentMovementPosition.y)];
+    //[renderer deformPointsFromCenter: currentMovementPosition byX:(currentMovementPosition.x - lastMovementPosition.x) andY:(lastMovementPosition.y - currentMovementPosition.y)];
+    [renderer deformPointsFromCenter:startMovementPosition toPoint:currentMovementPosition];
+    [renderer render];
 	lastMovementPosition = currentMovementPosition;
 }
 

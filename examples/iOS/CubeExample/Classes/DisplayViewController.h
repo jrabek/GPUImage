@@ -8,6 +8,7 @@
 @interface DisplayViewController : UIViewController
 {
     CGPoint lastMovementPosition;
+    CGPoint startMovementPosition;
 @private
     ES2Renderer *renderer;
     GPUImageTextureInput *textureInput;

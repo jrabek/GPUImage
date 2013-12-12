@@ -323,7 +323,7 @@ void InitPlane(uint32_t w, uint32_t h, vertex_t *vertices, GLushort *indices)
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     
     if(!doneHealing) {
-        [self performSelector:@selector(autoHeal) withObject:nil afterDelay:0.05];
+        [self performSelector:@selector(autoHeal) withObject:nil afterDelay:0.01];
     }
 }
 
@@ -381,10 +381,12 @@ void InitPlane(uint32_t w, uint32_t h, vertex_t *vertices, GLushort *indices)
             GLfloat distX = glCenterX - px;
             GLfloat distY = glCenterY - py;
             GLfloat dist = sqrt(distX*distX + distY*distY);
-            if(dist < 0.1) {
-                imageVertices[offset].dx = (glPointY - glCenterY);
-                imageVertices[offset].dy = (glPointX - glCenterX);
-            }
+            //if(dist < 0.2) {
+                GLfloat scale = 1 / dist;
+                scale = scale > 5.0 ? 5.0 : scale;
+                imageVertices[offset].dx = (glPointY - glCenterY) * scale;
+                imageVertices[offset].dy = (glPointX - glCenterX) * scale;
+            //}
             
             //if(x==1 && y==1)
             //    NSLog(@"(%d,%d) p(%.2f,%.2f) d(%.2f,%.2f) s(%.2f,%.2f,%.2f)", x, y, glPointX, glPointY, glPointX - glCenterX, glPointY - glCenterY, distX, distY,dist);
